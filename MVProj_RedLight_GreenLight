@@ -1,0 +1,170 @@
+import cv2
+import numpy as np
+import time
+import random
+from ultralytics import YOLO
+import os
+
+model = YOLO('yolov8n.pt')
+
+vid = cv2.VideoCapture(0)
+
+folderPath = r'C:\Users\User\Downloads\Machine Vision\frame'
+mylist = os.listdir(folderPath)
+graphic = [cv2.imread(f'{folderPath}/{imPath}') for imPath in mylist]
+intro = graphic[0];     #intro picture
+kill = graphic[1];      #game over picture
+winner = graphic[2];    #winner picture
+green = graphic[3];     #move picture
+red = graphic[4];       #stop picture
+testing = graphic[5];   #standby picture
+
+test = True
+
+cv2.imshow('Squid Game', intro)
+cv2.waitKey(1)
+
+while True:
+    cv2.imshow('Squid Game', intro)
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        cv2.destroyAllWindows()
+        break
+
+person_detected = False
+maxMove = 6500000
+timer_duration = 100  # Set the timer duration in seconds (adjust as needed)
+start_time = time.time()
+
+console = cv2.imshow('RED/GREEN',testing)
+font = cv2.FONT_HERSHEY_SIMPLEX
+win = False
+prev = time.time()
+prevDoll = prev
+
+while test:
+    ret, frame = vid.read()
+    result = model(frame, stream = True)
+    for r in result:
+        boxes = r.boxes
+        for bbox in boxes:
+            x1,y1,x2,y2 = bbox.xyxy[0]
+            x1,y1,x2,y2 = int(x1),int(y1),int(x2),int(y2)
+            
+            cls_idx = int(bbox.cls[0])
+            cls_name = model.names[cls_idx]
+            conf = round(float(bbox.conf[0]),2)
+            
+            if cls_name == "person":
+                perPos = x1,y1,x2,y2
+                testroi = frame[y1:y2,x1:x2]
+                cv2.imshow('testroi',testroi)
+
+    cv2.imshow('Webcam',frame)
+
+    if cv2.waitKey(1) & 0xFF == ord('a'):
+        console = cv2.imshow('RED/GREEN',green)
+        cv2.destroyWindow('testroi')
+        test = False
+    
+while not test:
+    ret, frame = vid.read()
+    player = []
+    
+    #cv2.rectangle(frame, (0, 0), (640, 480), (0, 255, 0), 5)
+
+    if not person_detected and (cv2.waitKey(10) & 0xFF == ord(' ')):
+        cv2.destroyAllWindows()
+        win = True
+        break
+        
+
+    cur = time.time()
+    no = random.randint(4, 5)
+    if cur - prev >= no:
+        prev = cur
+        if cv2.waitKey(10) & 0xFF == ord(' '):
+            cv2.destroyAllWindows()
+            win = True
+            break
+
+        if not person_detected:
+            console = cv2.imshow('RED/GREEN',red)
+            results = model(frame, stream = True)
+            for idx, r in enumerate(results):
+                boxes = r.boxes
+                for bbox in boxes:
+                    x1,y1,x2,y2 = bbox.xyxy[0]
+                    x1,y1,x2,y2 = int(x1),int(y1),int(x2),int(y2)
+                    
+                    cls_idx = int(bbox.cls[0])
+                    cls_name = model.names[cls_idx]
+                    conf = round(float(bbox.conf[0]),2)
+                    
+                    if cls_name == "person":
+                        perPos = x1,y1,x2,y2
+                        roi = frame[y1:y2,x1:x2]
+                        cv2.imshow('roi',roi)
+                        player.append(perPos)
+                        roi = frame[y1:y2,x1:x2]
+                        ref = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+                        person_detected = True
+                        print("Person detected")
+
+        else:
+            console = cv2.imshow('RED/GREEN',green)
+            #cv2.rectangle(frame, (0, 0), (640, 480), (0, 255, 0), 5)
+            person_detected = False
+
+
+    if person_detected:
+        roi = frame[y1:y2,x1:x2]
+        #cv2.rectangle(frame, (0, 0), (640, 480), (0, 0, 255), 5)
+        gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+        frameDelta = cv2.absdiff(ref, gray)
+        thresh = cv2.threshold(frameDelta, 20, 255, cv2.THRESH_BINARY)[1]
+        change = np.sum(thresh)
+        print(change)
+
+        if change > maxMove:
+            cv2.destroyAllWindows()
+            break
+            # user_input = input("Try Again? (y/n): ")
+            # if user_input.lower() == 'n':
+            #     break
+            # else:
+            #     start_time = time.time()  # Reset the timer
+    else:
+        if cv2.waitKey(10) & 0xFF == ord(' '):
+            cv2.destroyAllWindows()
+            win = True
+            break
+
+
+    cv2.imshow('Webcam', frame)
+
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+vid.release()
+
+if not win:
+    for i in range(10):
+        cv2.imshow('Squid Game',kill)
+   
+    while True:
+        cv2.imshow('Squid Game',kill)
+        if cv2.waitKey(10) & 0xFF == ord('q'):
+            break
+else:
+
+    cv2.imshow('Squid Game', winner)
+    cv2.waitKey(125)
+    
+
+    while True:
+        cv2.imshow('Squid Game', winner)
+        # cv2.imshow('shit',cv2.resize(graphic[3], (0, 0), fx = 0.5, fy = 0.5))
+        if cv2.waitKey(10) & 0xFF == ord('q'):
+            break
+
+cv2.destroyAllWindows()
